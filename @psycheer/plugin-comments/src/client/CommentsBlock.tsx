@@ -34,6 +34,8 @@ interface CommentsBlockProps {
 }
 
 export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, targetId }) => {
+  console.log('CommentsBlock props:', { targetCollection, targetId });
+  
   const api = useAPIClient();
   const { data: currentUser } = useCurrentUserContext();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -45,18 +47,37 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
   const [loading, setLoading] = useState(false);
 
   const loadComments = async () => {
+    if (!targetCollection || !targetId) {
+      console.warn('Cannot load comments: missing targetCollection or targetId', { targetCollection, targetId });
+      return;
+    }
+    
+    console.log('Loading comments for:', { targetCollection, targetId });
     try {
       const response = await api.request({
         url: 'comments:list',
         method: 'post',
         data: {
-          targetCollection,
-          targetId,
+          values: {
+            targetCollection,
+            targetId,
+          },
         },
       });
-      setComments(response?.data || []);
+      
+      console.log('Comments API response:', response);
+      const commentsData = response?.data?.data;
+      if (Array.isArray(commentsData)) {
+        console.log('Loaded comments:', commentsData);
+        setComments(commentsData);
+      } else {
+        console.error('Comments API returned non-array:', commentsData);
+        setComments([]);
+      }
     } catch (error) {
+      console.error('Failed to load comments:', error);
       message.error('Failed to load comments');
+      setComments([]);
     }
   };
 
@@ -73,15 +94,18 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
         url: 'comments:create',
         method: 'post',
         data: {
-          targetCollection,
-          targetId,
-          content: newComment,
+          values: {
+            targetCollection,
+            targetId,
+            content: newComment,
+          },
         },
       });
       setNewComment('');
       await loadComments();
       message.success('Comment added');
     } catch (error) {
+      console.error('Failed to add comment:', error);
       message.error('Failed to add comment');
     } finally {
       setLoading(false);
@@ -97,10 +121,12 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
         url: 'comments:create',
         method: 'post',
         data: {
-          targetCollection,
-          targetId,
-          content: replyContent,
-          parentId,
+          values: {
+            targetCollection,
+            targetId,
+            content: replyContent,
+            parentId,
+          },
         },
       });
       setReplyContent('');
@@ -108,6 +134,7 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
       await loadComments();
       message.success('Reply added');
     } catch (error) {
+      console.error('Failed to add reply:', error);
       message.error('Failed to add reply');
     } finally {
       setLoading(false);
@@ -126,7 +153,9 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
           filterByTk: commentId,
         },
         data: {
-          content: editContent,
+          values: {
+            content: editContent,
+          },
         },
       });
       setEditingId(null);
@@ -134,6 +163,7 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
       await loadComments();
       message.success('Comment updated');
     } catch (error) {
+      console.error('Failed to update comment:', error);
       message.error('Failed to update comment');
     } finally {
       setLoading(false);

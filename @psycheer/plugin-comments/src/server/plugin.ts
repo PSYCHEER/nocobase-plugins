@@ -25,42 +25,36 @@ export class PluginCommentsServer extends Plugin {
       name: 'comments',
       actions: {
         list: async (ctx, next) => {
-          const { targetCollection, targetId } = ctx.action.params.values || ctx.action.params;
-          
-          const comments = await ctx.db.getRepository('comments').find({
-            filter: {
-              targetCollection,
-              targetId,
-              isDeleted: false,
-              parentId: null, // Only top-level comments
-            },
-            appends: ['user', 'replies', 'replies.user'],
-            sort: ['-createdAt'],
+          // ACL: musí mať právo comments:list
+          console.log('[Comments ACL] list:', {
+            user: ctx.state.currentUser,
+            allowed: ctx.acl.can('comments:list')
           });
-
-          ctx.body = comments;
-          await next();
+          if (!ctx.acl.can('comments:list')) {
+            ctx.throw(403, 'No permission to view comments');
+          }
+          // ...existing code...
         },
 
         create: async (ctx, next) => {
-          const { targetCollection, targetId, content, parentId, type = 'comment', metadata } = ctx.action.params.values;
-          const userId = ctx.state.currentUser?.id;
-
-          if (!userId) {
-            ctx.throw(401, 'Unauthorized');
+          // Robust extraction of values
+          let targetCollection, targetId, content, parentId, type = 'comment', metadata;
+          if (ctx.action?.params?.values?.values) {
+            ({ targetCollection, targetId, content, parentId, type = 'comment', metadata } = ctx.action.params.values.values);
+          } else if (ctx.action?.params?.values) {
+            ({ targetCollection, targetId, content, parentId, type = 'comment', metadata } = ctx.action.params.values);
+          } else {
+            ({ targetCollection, targetId, content, parentId, type = 'comment', metadata } = ctx.action?.params || {});
           }
-
-          const comment = await ctx.db.getRepository('comments').create({
-            values: {
-              userId,
-              targetCollection,
-              targetId,
-              content,
-              parentId,
-              type,
-              metadata,
-            },
+          const userId = ctx.state.currentUser?.id;
+          console.log('[Comments ACL] create:', {
+            user: ctx.state.currentUser,
+            allowed: ctx.acl.can('comments:create')
           });
+          if (!ctx.acl.can('comments:create')) {
+            ctx.throw(403, 'No permission to create comments');
+          }
+          // ...existing code...
 
           // Extract mentions
           const mentionRegex = /@(\w+)/g;
@@ -117,20 +111,37 @@ export class PluginCommentsServer extends Plugin {
         },
 
         update: async (ctx, next) => {
-          const { filterByTk } = ctx.action.params;
-          const { content } = ctx.action.params.values;
+          // Robust extraction of filterByTk and content
+          let filterByTk;
+          if (ctx.action?.params?.filterByTk) {
+            filterByTk = ctx.action.params.filterByTk;
+          } else if (ctx.action?.params?.values?.filterByTk) {
+            filterByTk = ctx.action.params.values.filterByTk;
+          } else if (ctx.action?.params?.values?.values?.filterByTk) {
+            filterByTk = ctx.action.params.values.values.filterByTk;
+          }
+          const content = ctx.action?.params?.values?.content || ctx.action?.params?.values?.values?.content;
           const userId = ctx.state.currentUser?.id;
+
+          console.log('[Comments API] update request:', { filterByTk, content, userId });
 
           const comment = await ctx.db.getRepository('comments').findOne({
             filterByTk,
           });
 
           if (!comment) {
+            console.error('[Comments API] update: Comment not found', { filterByTk });
             ctx.throw(404, 'Comment not found');
           }
 
-          if (comment.userId !== userId) {
-            ctx.throw(403, 'Forbidden');
+          // ACL: môže upravovať ak má právo alebo je autor
+          console.log('[Comments ACL] update:', {
+            user: ctx.state.currentUser,
+            allowed: ctx.acl.can('comments:update', comment),
+            isAuthor: comment.userId === userId
+          });
+          if (!ctx.acl.can('comments:update', comment) && comment.userId !== userId) {
+            ctx.throw(403, 'No permission to update this comment');
           }
 
           await ctx.db.getRepository('comments').update({
@@ -147,6 +158,7 @@ export class PluginCommentsServer extends Plugin {
             appends: ['user'],
           });
 
+          console.log('[Comments API] update: updated comment', updated);
           ctx.body = updated;
           await next();
         },
@@ -163,8 +175,14 @@ export class PluginCommentsServer extends Plugin {
             ctx.throw(404, 'Comment not found');
           }
 
-          if (comment.userId !== userId) {
-            ctx.throw(403, 'Forbidden');
+          // ACL: môže mazať ak má právo alebo je autor
+          console.log('[Comments ACL] destroy:', {
+            user: ctx.state.currentUser,
+            allowed: ctx.acl.can('comments:destroy', comment),
+            isAuthor: comment.userId === userId
+          });
+          if (!ctx.acl.can('comments:destroy', comment) && comment.userId !== userId) {
+            ctx.throw(403, 'No permission to delete this comment');
           }
 
           // Soft delete
@@ -230,9 +248,32 @@ export class PluginCommentsServer extends Plugin {
       },
     });
 
+    // Register permission snippet for comments (use string action names per docs)
     this.app.acl.registerSnippet({
-      name: 'pm.comments',
-      actions: ['comments:*'],
+      name: 'comments',
+      actions: ['comments:list', 'comments:create', 'comments:update', 'comments:destroy'],
+    });
+
+    // Register available actions so they appear in Role/Permission UI with readable names
+    this.app.acl.setAvailableAction('comments:list', {
+      displayName: '{{t("View comments")}}',
+      type: 'existing-data',
+    });
+
+    this.app.acl.setAvailableAction('comments:create', {
+      displayName: '{{t("Create comments")}}',
+      type: 'new-data',
+      onNewRecord: true,
+    });
+
+    this.app.acl.setAvailableAction('comments:update', {
+      displayName: '{{t("Edit comments")}}',
+      type: 'existing-data',
+    });
+
+    this.app.acl.setAvailableAction('comments:destroy', {
+      displayName: '{{t("Delete comments")}}',
+      type: 'existing-data',
     });
     
     console.log('[Comments Plugin] Resources and ACL registered successfully');

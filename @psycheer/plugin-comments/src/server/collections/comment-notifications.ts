@@ -1,6 +1,12 @@
 import { CollectionOptions } from '@nocobase/database';
 
 export default {
+  displayName: 'Comment Notifications',
+  group: 'System',
+  interface: 'table',
+  displayed: true,
+  hidden: false,
+  internal: false,
   name: 'comment_notifications',
   title: 'Comment Notifications',
   fields: [

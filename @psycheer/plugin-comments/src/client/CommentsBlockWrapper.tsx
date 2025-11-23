@@ -15,7 +15,8 @@ export const CommentsBlockWrapper: React.FC<{ collection?: string }> = ({ collec
   
   // Try multiple ways to get collection and ID
   const targetCollection = collection || collectionCtx?.name || record?.__collection?.name || record?.__collectionName;
-  const targetId = record?.id || params?.id || dataBlockProps?.params?.filterByTk;
+  // Prioritize dataBlockProps.filterByTk (most reliable in detail views)
+  const targetId = dataBlockProps?.filterByTk || dataBlockProps?.params?.filterByTk || params?.id || record?.id;
 
   console.log('CommentsBlockWrapper - targetCollection:', targetCollection, 'targetId:', targetId);
 

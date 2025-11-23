@@ -1,6 +1,12 @@
 import { CollectionOptions } from '@nocobase/database';
 
 export default {
+  displayName: 'Comments',
+  group: 'System',
+  interface: 'table',
+  displayed: true,
+  hidden: false,
+  internal: false,
   name: 'comments',
   title: 'Comments',
   fields: [

@@ -106,22 +106,22 @@ export class PluginAnnoyancyRemovalClient extends Plugin {
       
       if (settings.hideLicenseSettings) {
         cssRules += `
-        a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"]),
-        li[data-menu-id*="license"]:not([data-menu-id*="annoyancy-removal"]) {
+        a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"]):not([href*="permissions"]),
+        li[data-menu-id*="license"]:not([data-menu-id*="annoyancy-removal"]):not([data-menu-id*="permissions"]) {
           display: none !important;
         }
         
-        .ant-menu-item:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"])) {
+        .ant-menu-item:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"]):not([href*="permissions"])) {
           display: none !important;
         }
         
-        li:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"])) {
+        li:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"]):not([href*="permissions"])) {
           display: none !important;
         }
         
-        .ant-card:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"])),
-        .ant-list-item:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"])),
-        .ant-col:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"])) {
+        .ant-card:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"]):not([href*="permissions"])),
+        .ant-list-item:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"]):not([href*="permissions"])),
+        .ant-col:has(a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"]):not([href*="permissions"])) {
           display: none !important;
         }
         `;
@@ -201,13 +201,14 @@ export class PluginAnnoyancyRemovalClient extends Plugin {
     }
     
     const observer = new MutationObserver(() => {
-      if (window.location.pathname.includes('annoyancy-removal')) {
+      const path = window.location.pathname;
+      if (path.includes('annoyancy-removal') || path.includes('permissions')) {
         return;
       }
       
       setTimeout(() => {
         if (settings.hideLicenseSettings) {
-          const licenseLinks = document.querySelectorAll('a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"])');
+          const licenseLinks = document.querySelectorAll('a[href*="/admin/settings/license"]:not([href*="annoyancy-removal"]):not([href*="permissions"])');
           licenseLinks.forEach(link => {
             const parent = link.closest('li') || link.closest('.ant-menu-item') || link.parentElement;
             if (parent) (parent as HTMLElement).style.display = 'none';
