@@ -158,6 +158,7 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
           },
         },
       });
+
       setEditingId(null);
       setEditContent('');
       await loadComments();
@@ -171,19 +172,48 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
   };
 
   const handleDelete = async (commentId: number) => {
-    try {
-      await api.request({
-        url: `comments:destroy`,
-        method: 'post',
-        params: {
-          filterByTk: commentId,
-        },
-      });
-      await loadComments();
-      message.success('Comment deleted');
-    } catch (error) {
-      message.error('Failed to delete comment');
-    }
+    // Optimistic removal: update UI immediately, perform delete in background.
+    const removeCommentById = (list: Comment[], id: number): Comment[] => {
+      return list.reduce<Comment[]>((acc, c) => {
+        if (c.id === id) return acc; // drop this comment
+        const copy = { ...c } as Comment;
+        if (copy.replies && copy.replies.length) {
+          copy.replies = removeCommentById(copy.replies, id);
+        }
+        acc.push(copy);
+        return acc;
+      }, []);
+    };
+
+    // Keep a snapshot for potential revert
+    const previous = comments;
+
+    // Apply optimistic update
+    setComments((prev) => removeCommentById(prev, commentId));
+    message.success('Comment deleted (pending)');
+
+    // Fire delete request and refresh in background. If it fails, revert and show error.
+    (async () => {
+      try {
+        await api.request({
+          url: `comments:destroy`,
+          method: 'post',
+          params: {
+            filterByTk: commentId,
+          },
+        });
+
+        // Try a non-blocking reload to reconcile state; ignore errors here.
+        loadComments().catch((e) => {
+          console.warn('[CommentsBlock] background loadComments failed', e);
+        });
+      } catch (error) {
+        console.error('[CommentsBlock] comments:destroy failed', error);
+        // Revert optimistic change
+        setComments(previous);
+        message.error('Failed to delete comment');
+      }
+    })();
   };
 
   const renderChangelogIcon = (metadata: any) => {
