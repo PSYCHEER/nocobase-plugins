@@ -1,0 +1,1 @@
+# @psycheer/plugin-license-removal

@@ -1,0 +1,15 @@
+{
+  "name": "@psycheer/plugin-css-override",
+  "displayName": "CSS Override",
+  "author": "PSYCHEER",
+  "description": "Custom CSS override plugin for NocoBase",
+  "version": "0.1.0",
+  "main": "dist/server/index.js",
+  "client": "dist/client/index.js",
+  "dependencies": {},
+  "peerDependencies": {
+    "@nocobase/client": "1.x",
+    "@nocobase/server": "1.x",
+    "@nocobase/test": "1.x"
+  }
+}

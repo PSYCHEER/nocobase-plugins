@@ -1,0 +1,19 @@
+{
+  "name": "@psycheer/plugin-custom-charts",
+  "displayName": "Custom Charts",
+  "author": "PSYCHEER",
+  "description": "Adds custom charts into NocoBase",
+  "version": "0.1.1",
+  "main": "dist/server/index.js",
+  "client": "dist/client/index.js",
+  "dependencies": {
+    "deepmerge": "^4.3.1",
+    "echarts": "^5.5.1",
+    "echarts-for-react": "^3.0.2"
+  },
+  "peerDependencies": {
+    "@nocobase/client": "1.x",
+    "@nocobase/server": "1.x",
+    "@nocobase/test": "1.x"
+  }
+}

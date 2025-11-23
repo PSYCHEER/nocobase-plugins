@@ -1,0 +1,25 @@
+{
+  "name": "@psycheer/plugin-comments",
+  "version": "0.1.0",
+  "main": "dist/server/index.js",
+  "client": "dist/client/index.js",
+  "displayName": "Comments",
+  "displayName.nl-NL": "Reacties",
+  "displayName.zh-CN": "评论",
+  "description": "Advanced commenting system with threads, mentions, notifications and changelog tracking",
+  "keywords": [
+    "nocobase",
+    "plugin",
+    "comments",
+    "changelog",
+    "mentions",
+    "notifications"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "peerDependencies": {
+    "@nocobase/client": "1.x",
+    "@nocobase/server": "1.x",
+    "@nocobase/test": "1.x"
+  }
+}

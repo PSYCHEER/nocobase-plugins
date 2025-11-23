@@ -1,0 +1,12 @@
+{
+  "License Removal": "Skrytie licencie",
+  "License removal settings": "Nastavenia skrývania licencie",
+  "Hide license menu items": "Skryť položky licenčného menu",
+  "Hides all menu items containing 'license'": "Skryje všetky položky obsahujúce 'license' v menu",
+  "Block license URLs": "Blokovať URL licencie",
+  "Redirects from /admin/settings/license-settings to main page": "Presmeruje z /admin/settings/license-settings na hlavnú stránku",
+  "Hide license cards": "Skryť licenčné karty",
+  "Hides all cards and blocks related to license in settings": "Skryje všetky karty a bloky súvisiace s licenciou v nastaveniach",
+  "Settings saved successfully": "Nastavenia boli úspešne uložené",
+  "Failed to save settings": "Nepodarilo sa uložiť nastavenia"
+}

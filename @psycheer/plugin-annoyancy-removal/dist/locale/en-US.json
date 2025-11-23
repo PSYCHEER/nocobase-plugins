@@ -1,0 +1,12 @@
+{
+  "License Removal": "License Removal",
+  "License removal settings": "License removal settings",
+  "Hide license menu items": "Hide license menu items",
+  "Hides all menu items containing 'license'": "Hides all menu items containing 'license'",
+  "Block license URLs": "Block license URLs",
+  "Redirects from /admin/settings/license-settings to main page": "Redirects from /admin/settings/license-settings to main page",
+  "Hide license cards": "Hide license cards",
+  "Hides all cards and blocks related to license in settings": "Hides all cards and blocks related to license in settings",
+  "Settings saved successfully": "Settings saved successfully",
+  "Failed to save settings": "Failed to save settings"
+}
