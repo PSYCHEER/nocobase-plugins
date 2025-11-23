@@ -36,7 +36,7 @@ export class PluginCommentsClient extends Plugin {
       icon: 'MessageOutlined',
     });
 
-    console.log('[Comments Plugin Client] Loaded successfully');
+    // client loaded
   }
 
   async afterLoad() {}

@@ -9,16 +9,13 @@ export const CommentsBlockWrapper: React.FC<{ collection?: string }> = ({ collec
   const params = useParams<{ id?: string }>();
   const dataBlockProps = useDataBlockProps();
   
-  console.log('CommentsBlockWrapper - record:', record);
-  console.log('CommentsBlockWrapper - params:', params);
-  console.log('CommentsBlockWrapper - dataBlockProps:', dataBlockProps);
   
   // Try multiple ways to get collection and ID
   const targetCollection = collection || collectionCtx?.name || record?.__collection?.name || record?.__collectionName;
   // Prioritize dataBlockProps.filterByTk (most reliable in detail views)
   const targetId = dataBlockProps?.filterByTk || dataBlockProps?.params?.filterByTk || params?.id || record?.id;
 
-  console.log('CommentsBlockWrapper - targetCollection:', targetCollection, 'targetId:', targetId);
+  // debug logs removed
 
   if (!targetCollection || !targetId) {
     return (

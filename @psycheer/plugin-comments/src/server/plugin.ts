@@ -7,7 +7,7 @@ export class PluginCommentsServer extends Plugin {
   async beforeLoad() {}
 
   async load() {
-    console.log('[Comments Plugin] Starting to load...');
+    // Minimal startup log
     // Helper: safe ACL check that won't throw when ACL/auth internals misbehave.
     // Also allow bypass by header `x-role: root` to ensure root access when auth is unavailable.
     const safeCan = async (ctx: any, action: string, subject?: any) => {
@@ -15,12 +15,59 @@ export class PluginCommentsServer extends Plugin {
         const headerRole = (ctx && ctx.headers && (ctx.headers['x-role'] || ctx.headers['x-roles']));
         if (headerRole === 'root' || headerRole === 'ROOT') return true;
         if (ctx && ctx.state && ctx.state.currentUser && ctx.state.currentUser.id === 1) return true;
-        // ctx.acl.can may be sync or async depending on implementation
-        const res = ctx && ctx.acl ? ctx.acl.can(action, subject) : false;
-        if (res && typeof (res as any).then === 'function') {
-          return !!(await res);
+
+        // First attempt: use runtime ACL if available
+        try {
+          const res = ctx && ctx.acl ? ctx.acl.can(action, subject) : false;
+          if (res && typeof (res as any).then === 'function') {
+            const awaited = await res;
+            if (awaited) return true;
+          } else if (res) {
+            return true;
+          }
+        } catch (e) {
+          console.warn('[Comments Plugin] ctx.acl.can threw, falling back to DB permissions check', e && e.message);
         }
-        return !!res;
+
+        // Fallback: check permissions table directly. This helps when runtime ACL cache isn't propagated.
+        try {
+          const permsRepo = ctx && ctx.db && typeof ctx.db.getRepository === 'function' ? ctx.db.getRepository('permissions') : null;
+          if (!permsRepo || typeof permsRepo.find !== 'function') {
+            console.warn('[Comments Plugin] safeCan fallback: permissions repository unavailable');
+            return false;
+          }
+
+          // Try matching both full action and short action name
+          const shortAction = (action || '').split(':').pop();
+          const rows = await permsRepo.find({ filter: { resource: 'comments', action: { $in: [action, shortAction] } } });
+          if (!rows || rows.length === 0) {
+            // no explicit permission rows — deny by default
+            return false;
+          }
+
+          const user = ctx.state.currentUser || {};
+          const roleNames = Array.isArray(user.roles) ? user.roles.map((r: any) => r && (r.name || r.id)).filter(Boolean) : [];
+
+          for (const r of rows) {
+            try {
+              // If permission row ties to a role id/name
+              if (r.roleId && roleNames.length) {
+                if (roleNames.includes(r.roleId) || roleNames.includes(String(r.roleId))) return true;
+              }
+              // If permission row ties to a user
+              if (r.userId && user.id && Number(r.userId) === Number(user.id)) return true;
+              // If permission row is global allow for this resource/action
+              if ((r.allow === true || r.effect === 'allow') && !r.roleId && !r.userId) return true;
+            } catch (inner) {
+              // ignore row parsing issues
+            }
+          }
+
+          return false;
+        } catch (e) {
+          console.error('[Comments Plugin] safeCan fallback failed', e);
+          return false;
+        }
       } catch (e) {
         console.error('[Comments Plugin] safeCan error', e);
         return false;
@@ -34,18 +81,9 @@ export class PluginCommentsServer extends Plugin {
       });
       console.log('[Comments Plugin] Collections imported successfully');
       // Diagnostic: log whether authManager.tokenController is available
-      try {
-        console.log('[Comments Plugin] authManager.tokenController present:', !!(this.app && this.app.authManager && this.app.authManager.tokenController));
-      } catch (e) {
-        console.error('[Comments Plugin] failed to log tokenController presence', e);
-      }
+      // silent: skip verbose authManager/tokenController diagnostics
       // Diagnostic: check whether `users` collection is present and has repository
-      try {
-        const usersCollection = this.db.getCollection && this.db.getCollection('users');
-        console.log('[Comments Plugin] users collection present:', !!usersCollection, 'has repository:', !!(usersCollection && (usersCollection as any).repository));
-      } catch (e) {
-        console.error('[Comments Plugin] failed to check users collection', e);
-      }
+      // silent: skip verbose users collection presence check
     } catch (error) {
       console.error('[Comments Plugin] Failed to import collections:', error);
       throw error;
@@ -117,7 +155,6 @@ export class PluginCommentsServer extends Plugin {
           // For 'own' permissions we pass a subject containing the current user id and target info
           const subject: any = isRoot ? undefined : { userId: user?.id, targetCollection: filter.targetCollection, targetId: filter.targetId };
           const allowed = await safeCan(ctx, 'comments:list', subject);
-          console.log('[Comments ACL] list:', { user: ctx.state.currentUser, allowed, subject, filter });
           if (!allowed) {
             ctx.throw(403, 'No permission to view comments');
           }
@@ -139,7 +176,6 @@ export class PluginCommentsServer extends Plugin {
           }
           const userId = ctx.state.currentUser?.id;
           const allowedCreate = await safeCan(ctx, 'comments:create');
-          console.log('[Comments ACL] create:', { user: ctx.state.currentUser, allowed: allowedCreate });
           if (!allowedCreate) {
             ctx.throw(403, 'No permission to create comments');
           }
@@ -210,7 +246,7 @@ export class PluginCommentsServer extends Plugin {
           const content = ctx.action?.params?.values?.content || ctx.action?.params?.values?.values?.content;
           const userId = ctx.state.currentUser?.id;
 
-          console.log('[Comments API] update request:', { filterByTk, content, userId });
+          // update request received
 
           const comment = await ctx.db.getRepository('comments').findOne({
             filterByTk,
@@ -223,7 +259,7 @@ export class PluginCommentsServer extends Plugin {
 
           // ACL: môže upravovať ak má právo alebo je autor
           const allowedUpdate = await safeCan(ctx, 'comments:update', comment);
-          console.log('[Comments ACL] update:', { user: ctx.state.currentUser, allowed: allowedUpdate, isAuthor: comment.userId === userId });
+          // ACL update check
           if (!allowedUpdate && comment.userId !== userId) {
             ctx.throw(403, 'No permission to update this comment');
           }
@@ -242,7 +278,7 @@ export class PluginCommentsServer extends Plugin {
             appends: ['user'],
           });
 
-          console.log('[Comments API] update: updated comment', updated);
+          // update completed
           ctx.body = updated;
           await next();
         },
@@ -261,7 +297,7 @@ export class PluginCommentsServer extends Plugin {
 
           // ACL: môže mazať ak má právo alebo je autor
           const allowedDestroy = await safeCan(ctx, 'comments:destroy', comment);
-          console.log('[Comments ACL] destroy:', { user: ctx.state.currentUser, allowed: allowedDestroy, isAuthor: comment.userId === userId });
+          // ACL destroy check
           if (!allowedDestroy && comment.userId !== userId) {
             ctx.throw(403, 'No permission to delete this comment');
           }
@@ -314,7 +350,7 @@ export class PluginCommentsServer extends Plugin {
               try {
                 await ctx.db.getRepository('comments').update({ filterByTk, values: { isDeleted: true } });
                 const now = await ctx.db.getRepository('comments').findOne({ filterByTk, appends: ['user'] });
-                console.log('[Comments Plugin] destroy: fallback soft-delete applied', { filterByTk, now });
+                  // fallback soft-delete applied
                 ctx.body = { success: true, deleted: false, fallbackSoftDeleted: true, updated: now };
               } catch (e) {
                 console.error('[Comments Plugin] destroy: fallback soft-delete failed', e);
@@ -514,18 +550,7 @@ export class PluginCommentsServer extends Plugin {
     // Capture plugin instance for async callbacks below
     const plugin = this;
 
-    // Diagnostic: listen to ws auth token messages to log db availability when they arrive
-    try {
-      this.app.on && this.app.on('ws:message:auth:token', ({ clientId, payload }: any) => {
-        try {
-          console.log('[Comments Plugin] ws auth token event:', { clientId, hasDb: !!this.db, payloadPreview: !!payload });
-        } catch (e) {
-          console.error('[Comments Plugin] ws auth token event log failed', e);
-        }
-      });
-    } catch (e) {
-      // ignore if app.on not available
-    }
+    // Skip verbose ws auth token event logging in production
 
     // Register notification actions
     this.app.resource({
@@ -585,58 +610,38 @@ export class PluginCommentsServer extends Plugin {
       },
     });
     
-    console.log('[Comments Plugin] Load completed successfully');
+    // Load completed
 
     // DB diagnostics: log permission/role save attempts so we can see why UI changes fail
     try {
       if (this.db && this.db.on) {
-        this.db.on('permissions.beforeSave', async (model: any) => {
-          try {
-            console.log('[Comments Plugin][DB] permissions.beforeSave', { id: model && model.id, values: model && model.dataValues });
-          } catch (e) {
-            console.error('[Comments Plugin][DB] permissions.beforeSave log failed', e);
-          }
-        });
-
         this.db.on('permissions.afterSave', async (model: any) => {
+          // Minimal: try to reload runtime ACL when permissions change
           try {
-            console.log('[Comments Plugin][DB] permissions.afterSave', { id: model && model.id, values: model && (model.toJSON ? model.toJSON() : model) });
-            // Try to force ACL runtime reload so UI changes apply immediately in this process.
-            try {
-              if (plugin && plugin.app && plugin.app.acl && typeof (plugin.app.acl as any).writeRolesToACL === 'function') {
+            if (plugin && plugin.app && plugin.app.acl && typeof (plugin.app.acl as any).writeRolesToACL === 'function') {
+              try {
                 await (plugin.app.acl as any).writeRolesToACL();
-                console.log('[Comments Plugin] writeRolesToACL() called after permissions.afterSave');
+              } catch (e) {
+                console.error('[Comments Plugin] writeRolesToACL failed after permissions.afterSave', e);
               }
-            } catch (e) {
-              console.error('[Comments Plugin] failed to call writeRolesToACL after permissions.afterSave', e);
             }
           } catch (e) {
-            console.error('[Comments Plugin][DB] permissions.afterSave log failed', e);
-          }
-        });
-
-        this.db.on('roles.beforeSave', async (model: any) => {
-          try {
-            console.log('[Comments Plugin][DB] roles.beforeSave', { id: model && model.id, values: model && model.dataValues });
-          } catch (e) {
-            console.error('[Comments Plugin][DB] roles.beforeSave log failed', e);
+            console.error('[Comments Plugin] permissions.afterSave handler failed', e);
           }
         });
 
         this.db.on('roles.afterSave', async (model: any) => {
+          // Minimal: try to reload runtime ACL when roles change
           try {
-            console.log('[Comments Plugin][DB] roles.afterSave', { id: model && model.id, values: model && (model.toJSON ? model.toJSON() : model) });
-            // Force ACL runtime reload so role changes take effect immediately
-            try {
-              if (plugin && plugin.app && plugin.app.acl && typeof (plugin.app.acl as any).writeRolesToACL === 'function') {
+            if (plugin && plugin.app && plugin.app.acl && typeof (plugin.app.acl as any).writeRolesToACL === 'function') {
+              try {
                 await (plugin.app.acl as any).writeRolesToACL();
-                console.log('[Comments Plugin] writeRolesToACL() called after roles.afterSave');
+              } catch (e) {
+                console.error('[Comments Plugin] writeRolesToACL failed after roles.afterSave', e);
               }
-            } catch (e) {
-              console.error('[Comments Plugin] failed to call writeRolesToACL after roles.afterSave', e);
             }
           } catch (e) {
-            console.error('[Comments Plugin][DB] roles.afterSave log failed', e);
+            console.error('[Comments Plugin] roles.afterSave handler failed', e);
           }
         });
       }

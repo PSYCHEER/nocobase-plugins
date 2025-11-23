@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Input, Button, List, Avatar, Space, Typography, message, Popconfirm, Badge, Dropdown, Menu } from 'antd';
 import { 
   UserOutlined, 
@@ -34,7 +34,7 @@ interface CommentsBlockProps {
 }
 
 export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, targetId }) => {
-  console.log('CommentsBlock props:', { targetCollection, targetId });
+  // props debug removed
   
   const api = useAPIClient();
   const { data: currentUser } = useCurrentUserContext();
@@ -45,6 +45,10 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
   const [loading, setLoading] = useState(false);
+  const newEditorRef = useRef<HTMLDivElement | null>(null);
+  const editEditorRef = useRef<HTMLDivElement | null>(null);
+  const newVditorRef = useRef<any>(null);
+  const editVditorRef = useRef<any>(null);
 
   const loadComments = async () => {
     if (!targetCollection || !targetId) {
@@ -52,7 +56,7 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
       return;
     }
     
-    console.log('Loading comments for:', { targetCollection, targetId });
+    // loading comments
     try {
       const response = await api.request({
         url: 'comments:list',
@@ -65,10 +69,9 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
         },
       });
       
-      console.log('Comments API response:', response);
       const commentsData = response?.data?.data;
       if (Array.isArray(commentsData)) {
-        console.log('Loaded comments:', commentsData);
+        // loaded comments
         setComments(commentsData);
       } else {
         console.error('Comments API returned non-array:', commentsData);
@@ -85,8 +88,55 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
     loadComments();
   }, [targetCollection, targetId]);
 
+  // Initialize Vditor for new comment editor (if available)
+  useEffect(() => {
+    let mounted = true;
+    const init = async () => {
+      if (!newEditorRef.current) return;
+      try {
+        const mod = await import('vditor');
+        await import('vditor/dist/index.css');
+        const Vditor = (mod && (mod as any).default) || (mod as any).Vditor || mod;
+        if (!mounted) return;
+        try {
+          newVditorRef.current = new Vditor(newEditorRef.current, {
+            value: newComment || '',
+            height: 180,
+            mode: 'sv',
+            toolbar: ['bold', 'italic', 'strike', '|', 'list', 'ordered-list', 'check', '|', 'quote', 'line', 'code', 'inline-code', 'table', 'link', 'image', 'upload', 'edit-mode'],
+            input: () => {
+              try {
+                const v = newVditorRef.current && newVditorRef.current.getValue ? newVditorRef.current.getValue() : '';
+                setNewComment(v);
+              } catch (e) {
+                // ignore vditor input errors
+              }
+            }
+          });
+        } catch (e) {
+          newVditorRef.current = null;
+        }
+      } catch (e) {
+        // vditor not installed — keep textarea fallback
+        newVditorRef.current = null;
+      }
+    };
+    init();
+    return () => {
+      mounted = false;
+      if (newVditorRef.current && typeof newVditorRef.current.destroy === 'function') {
+        try { newVditorRef.current.destroy(); } catch (e) {}
+        newVditorRef.current = null;
+      }
+    };
+  }, []);
+
   const handleAddComment = async () => {
-    if (!newComment.trim()) return;
+    const content = (newVditorRef.current && typeof newVditorRef.current.getValue === 'function')
+      ? (newVditorRef.current.getValue() || '').trim()
+      : (newComment || '').trim();
+
+    if (!content) return;
 
     setLoading(true);
     try {
@@ -97,11 +147,17 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
           values: {
             targetCollection,
             targetId,
-            content: newComment,
+            content,
           },
         },
       });
+
+      // clear editor
       setNewComment('');
+      if (newVditorRef.current && typeof newVditorRef.current.setValue === 'function') {
+        try { newVditorRef.current.setValue(''); } catch (e) {}
+      }
+
       await loadComments();
       message.success('Comment added');
     } catch (error) {
@@ -237,7 +293,7 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
     const isOwner = currentUser?.data?.id === comment.user?.id;
     const isEditing = editingId === comment.id;
     
-    console.log('Comment:', comment.id, 'User:', comment.user?.id, 'CurrentUser:', currentUser?.data?.id, 'isOwner:', isOwner);
+    // ownership check (no debug log)
 
     if (comment.type === 'changelog') {
       return (
@@ -405,13 +461,26 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
       style={{ marginTop: '16px' }}
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <List
+          dataSource={comments}
+          renderItem={(comment) => renderComment(comment)}
+          locale={{ emptyText: 'No comments yet. Be the first to comment!' }}
+        />
+
         <div>
-          <TextArea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            rows={4}
-            placeholder="Write a comment (supports @mentions and markdown)..."
-          />
+          {/* Vditor container (if available) */}
+          <div ref={newEditorRef} style={{ display: 'block' }} />
+
+          {/* Fallback textarea when Vditor not loaded */}
+          {!newVditorRef.current && (
+            <TextArea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              rows={4}
+              placeholder="Write a comment (supports @mentions and markdown)..."
+            />
+          )}
+
           <Button
             type="primary"
             icon={<SendOutlined />}
@@ -422,12 +491,6 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
             Add Comment
           </Button>
         </div>
-
-        <List
-          dataSource={comments}
-          renderItem={(comment) => renderComment(comment)}
-          locale={{ emptyText: 'No comments yet. Be the first to comment!' }}
-        />
       </Space>
     </Card>
   );

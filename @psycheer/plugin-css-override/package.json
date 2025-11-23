@@ -3,7 +3,7 @@
   "displayName": "CSS Override",
   "author": "PSYCHEER",
   "description": "Custom CSS override plugin for NocoBase",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "dist/server/index.js",
   "client": "dist/client/index.js",
   "dependencies": {},
