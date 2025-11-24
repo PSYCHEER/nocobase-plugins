@@ -40,13 +40,61 @@ export class PluginAnnoyancyRemovalClient extends Plugin {
       };
     };
     
-    loadSettings().then((settings) => {
-      if (settings.hideLicenseSettings || settings.hideAiIntegration || settings.hideMobileDeprecated) {
-        this.hideElements(settings);
+    const path = window.location.pathname || '';
+    // Do not run these UI-hiding or redirecting helpers on signin/login/register pages
+    if (!/signin|login|register/i.test(path)) {
+      const hasAuthToken = () => {
+        try {
+          // check common localStorage keys
+          const ls = window.localStorage;
+          const keys = ['nb_token', 'nb:token', 'token', 'access_token', 'nocobase_token', 'Authorization'];
+          for (const k of keys) {
+            if (ls && ls.getItem && ls.getItem(k)) return true;
+          }
+
+          // check cookies
+          const cookie = document.cookie || '';
+          if (/nb_token=|nb:token=|access_token=|nocobase_token=|token=/i.test(cookie)) return true;
+        } catch (e) {
+          // ignore access errors
+        }
+        return false;
+      };
+
+      if (hasAuthToken()) {
+        loadSettings().then((settings) => {
+          if (settings.hideLicenseSettings || settings.hideAiIntegration || settings.hideMobileDeprecated) {
+            this.hideElements(settings);
+          }
+
+          this.blockLicenseUrls();
+        }).catch(() => {
+          // swallow errors so signin is not affected
+        });
+      } else {
+        // If no auth token yet, poll shortly for login (user may login without full page reload)
+        let checks = 0;
+        const maxChecks = 30; // ~30s
+        const intervalId = setInterval(async () => {
+          checks += 1;
+          if (hasAuthToken()) {
+            clearInterval(intervalId);
+            try {
+              const settings = await loadSettings();
+              if (settings.hideLicenseSettings || settings.hideAiIntegration || settings.hideMobileDeprecated) {
+                this.hideElements(settings);
+              }
+              this.blockLicenseUrls();
+            } catch (e) {
+              // ignore
+            }
+          }
+          if (checks >= maxChecks) {
+            clearInterval(intervalId);
+          }
+        }, 1000);
       }
-      
-      this.blockLicenseUrls();
-    });
+    }
   }
   
   blockLicenseUrls() {

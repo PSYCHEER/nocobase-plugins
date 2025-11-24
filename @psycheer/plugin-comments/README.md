@@ -19,3 +19,10 @@ Advanced commenting system with GitHub-style changelog tracking.
 2. Add the Comments block to any page
 3. Configure permissions for commenting
 4. Start collaborating!
+
+# To-Do
+- [ ] Improve rich text editor features
+- [ ] Add more notification options
+- [ ] Optimize performance for large comment threads
+- [ ] Write comprehensive tests
+- [ ] **ACL support for comments and changelogs** - Not yet implemented
