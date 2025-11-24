@@ -9,50 +9,58 @@
 
 import { Chart, ChartType, RenderProps } from '@nocobase/plugin-data-visualization/client';
 import { ReactECharts } from './ReactEcharts';
+import { ECharts } from './echarts';
 import deepmerge from 'deepmerge';
 
-export class Radar extends Chart {
+export class Radar extends ECharts {
   constructor() {
     super({
       name: 'radar',
       title: 'Radar Chart',
-      Component: ReactECharts,
-      config: [
-        {
-          configType: 'field',
-          name: 'categoryField',
-          title: 'Category Field',
-          required: true,
-        },
-        {
-          configType: 'field',
-          name: 'valueField',
-          title: 'Value Field',
-          required: true,
-        },
-        {
-          configType: 'field',
-          name: 'seriesField',
-          title: 'Series Field',
-        },
-        {
-          configType: 'input',
-          name: 'customColors',
-          title: 'Custom Colors (comma separated hex)',
-          defaultValue: '#5470c6,#91cc75,#fac858,#ee6666,#73c0de,#3ba272,#fc8452,#9a60b4,#ea7ccc',
-        },
-        {
-          configType: 'select',
-          name: 'areaStyle',
-          title: 'Fill Area',
-          defaultValue: 'filled',
-          options: [
-            { label: 'Filled', value: 'filled' },
-            { label: 'Line Only', value: 'none' },
-          ],
-        },
-      ],
+      series: { type: 'radar' },
+      config: [],
     });
+    this.config = [
+      {
+        configType: 'field',
+        name: 'categoryField',
+        title: 'Category Field',
+        required: true,
+      },
+      {
+        configType: 'field',
+        name: 'valueField',
+        title: 'Value Field',
+        required: true,
+      },
+      {
+        configType: 'field',
+        name: 'seriesField',
+        title: 'Series Field',
+      },
+      {
+        configType: 'input',
+        name: 'customColors',
+        title: 'Custom Colors (comma separated hex)',
+        defaultValue: '#5470c6,#91cc75,#fac858,#ee6666,#73c0de,#3ba272,#fc8452,#9a60b4,#ea7ccc',
+      },
+      {
+        configType: 'select',
+        name: 'areaStyle',
+        title: 'Fill Area',
+        defaultValue: 'filled',
+        options: [
+          { label: 'Filled', value: 'filled' },
+          { label: 'Line Only', value: 'none' },
+        ],
+      },
+      {
+        configType: 'input',
+        name: 'splitNumber',
+        title: 'Number of Rings',
+        defaultValue: 4,
+      },
+    ];
   }
 
   init: ChartType['init'] = (fields, { measures, dimensions }) => {
@@ -68,12 +76,13 @@ export class Radar extends Chart {
         seriesField: seriesField?.value,
         customColors: '#5470c6,#91cc75,#fac858,#ee6666,#73c0de,#3ba272,#fc8452,#9a60b4,#ea7ccc',
         areaStyle: 'filled',
+        splitNumber: 4,
       },
     };
   };
 
   getProps({ data, general, advanced, fieldProps }: RenderProps) {
-    const { categoryField, valueField, seriesField, customColors, areaStyle } = general;
+    const { categoryField, valueField, seriesField, customColors, areaStyle, splitNumber = 4 } = general;
     
     if (!categoryField || !valueField) {
       return deepmerge(
@@ -141,13 +150,24 @@ export class Radar extends Chart {
       }];
     }
 
+    // Získaj základné options z ECharts (vrátane tooltipu)
+    const base = super.getProps({ data, general, advanced, fieldProps });
+    
+    // Prepíš tooltip trigger na 'item' pre radar
+    base.tooltip = {
+      ...base.tooltip,
+      trigger: 'item',
+    };
+
+    // Pridaj radar špecifické options
     return deepmerge(
+      base,
       {
         color: colors,
         radar: {
           indicator,
           shape: 'polygon',
-          splitNumber: 4,
+          splitNumber: Number(splitNumber),
         },
         series: [{
           type: 'radar',
@@ -161,9 +181,11 @@ export class Radar extends Chart {
             color: '#fff',
           },
         },
-        tooltip: {
-          show: true,
-          trigger: 'item',
+        xAxis: {
+          show: false,
+        },
+        yAxis: {
+          show: false,
         },
         animation: false,
       },

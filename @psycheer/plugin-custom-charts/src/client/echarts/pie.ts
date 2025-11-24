@@ -82,9 +82,6 @@ export class Pie extends ECharts {
     const result = deepmerge(
       {
         color: colors,
-        tooltip: {
-          trigger: 'item',
-        },
         legend: {
           orient: 'vertical',
           left: 'left',

@@ -43,7 +43,7 @@ export class Bar extends ECharts {
 
   getProps({ data, general, advanced, fieldProps }: RenderProps) {
     const props = super.getProps({ data, general, advanced, fieldProps });
-    const { orientation = 'vertical', xField, yField, seriesField } = general;
+    const { orientation = 'vertical', xField, yField, seriesField, legendSort = 'none' } = general;
     
     // Detekcia ktoré pole má agregáciu (transformer)
     const xHasTransformer = fieldProps[xField]?.transformer;
@@ -77,6 +77,60 @@ export class Bar extends ECharts {
       }
     }
     
+    // Definuj polia pre tooltip
+    const categoryField = seriesField;
+    const valueField = yField;
+    const categoryLabel = fieldProps[categoryField]?.label;
+    const valueLabel = fieldProps[valueField]?.label;
+    
+    // Fix dimensions and series when seriesField is set
+    if (seriesField && props.dataset?.[0]) {
+      props.dataset[0].dimensions = [xField, yField];
+      
+      // Sort function
+      const sortSeries = (arr: any[], order: string) => {
+        if (order === 'none') return arr;
+        return arr.sort((a, b) => {
+          const na = Number(a), nb = Number(b);
+          if (!isNaN(na) && !isNaN(nb)) {
+            return order === 'asc' ? na - nb : nb - na;
+          }
+          return order === 'asc' ? a.localeCompare(b) : b.localeCompare(a);
+        });
+      };
+      
+      // Extract unique series values (xField) and category values (seriesField)
+      const seriesValues = sortSeries(Array.from(new Set(data.map((row: any) => row[xField]))), legendSort);
+      const categoryValues = Array.from(new Set(data.map((row: any) => row[seriesField]))).sort();
+      
+      // Set axis data
+      if (categoryAxis === 'x') {
+        props.xAxis.data = categoryValues;
+      } else {
+        props.yAxis.data = categoryValues;
+      }
+      
+      // Create a series for each unique xField value
+      props.series = seriesValues.map((seriesValue, index) => {
+        // Create data with y values for each category (seriesField value), null if missing
+        const seriesData = categoryValues.map(categoryValue => {
+          const row = data.find((r: any) => r[xField] === seriesValue && r[seriesField] === categoryValue);
+          return row ? Number(row[valueField]) : null;
+        });
+        
+        return {
+          name: String(seriesValue),
+          type: 'bar',
+          data: seriesData,
+          color: props.color?.[index % props.color.length],
+          stack: 'total',
+        };
+      }).filter(series => series.data.some(point => point !== null));
+      
+      // Remove dataset when using explicit data
+      delete props.dataset;
+    }
+    
     // Nastav osi
     props.xAxis = {
       ...props.xAxis,
@@ -89,18 +143,21 @@ export class Bar extends ECharts {
       type: categoryAxis === 'y' ? 'category' : 'value',
     };
     
-    // Ak boli polia vymenené, uprav encode v sériách
-    const needsSwap = (orientation === 'vertical' && categoryAxis === 'y') || 
-                      (orientation === 'horizontal' && categoryAxis === 'x');
-    
-    if (needsSwap && props.series && Array.isArray(props.series)) {
-      props.series = props.series.map((s: any) => ({
-        ...s,
-        encode: {
-          x: s.encode?.y || yField,
-          y: s.encode?.x || xField,
-        },
-      }));
+    // Pridaj axisPointer na správnu os
+    if (categoryAxis === 'x') {
+      props.xAxis = {
+        ...props.xAxis,
+        axisPointer: {
+          type: 'shadow'
+        }
+      };
+    } else {
+      props.yAxis = {
+        ...props.yAxis,
+        axisPointer: {
+          type: 'shadow'
+        }
+      };
     }
     
     // Ak nie je series pole, pridaj farby pre každý stĺpec
@@ -121,35 +178,41 @@ export class Bar extends ECharts {
       },
     };
     
-    // Vlastný tooltip formátovač
-    const categoryField = categoryAxis === 'x' ? xField : yField;
-    const valueField = categoryAxis === 'x' ? yField : xField;
-    const categoryLabel = categoryAxis === 'x' ? xLabel : yLabel;
-    const valueLabel = categoryAxis === 'x' ? yLabel : xLabel;
-    
+    // Vlastný tooltip formátovač - zachovaj vizuálne vlastnosti zo základnej triedy
     props.tooltip = {
+      ...props.tooltip, // zachovaj všetky vizuálne vlastnosti
       show: true,
       trigger: 'axis',
       axisPointer: {
-        type: 'shadow'
+        type: orientation === 'horizontal' ? 'shadow' : 'shadow'
       },
       formatter: (params: any) => {
         if (!params || params.length === 0) return '';
         
         if (seriesField) {
-          // S series: ukáž všetky série
-          let result = `${categoryLabel}: ${params[0].name}<br/>`;
+          // S series: ukáž kategóriu, total a rozdelenie
+          const categoryValue = params[0]?.name || 'N/A';
+          const total = params.reduce((sum: number, param: any) => sum + (param.value || 0), 0);
+          let result = `${categoryLabel || 'Series'}: ${String(categoryValue)} : ${total}<br/>`;
           params.forEach((param: any) => {
-            const value = typeof param.value === 'object' ? param.value[valueField] : param.value;
-            result += `${param.seriesName}: ${value}<br/>`;
+            const value = param.value;
+            if (value !== null && value !== undefined) {
+              result += `${String(param.seriesName || 'Value')}: ${value}<br/>`;
+            }
           });
           return result;
         } else {
           // Bez series: jednoduchý tooltip
           const param = params[0];
-          const categoryValue = param.name;
-          const dataValue = typeof param.value === 'object' ? param.value[valueField] : param.value;
-          return `${categoryLabel}: ${categoryValue}<br/>${valueLabel}: ${dataValue}`;
+          const categoryValue = param?.name || 'N/A';
+          let dataValue = param?.value;
+          if (typeof dataValue === 'object' && dataValue !== null) {
+            dataValue = dataValue[yField] || dataValue;
+          }
+          if (typeof dataValue === 'object') {
+            dataValue = JSON.stringify(dataValue);
+          }
+          return `${categoryLabel || categoryField || 'Category'}: ${String(categoryValue)}<br/>${valueLabel || valueField || 'Value'}: ${String(dataValue || 'N/A')}`;
         }
       }
     };
