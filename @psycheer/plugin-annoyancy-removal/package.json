@@ -3,7 +3,7 @@
   "displayName": "Annoyancy Removal",
   "author":"PSYCHEER",
   "description": "Hide annoying UI elements in NocoBase",
-  "version": "0.1.7",
+  "version": "0.1.9-indev-7",
   "main": "dist/server/index.js",
   "client": "dist/client/index.js",
   "dependencies": {},

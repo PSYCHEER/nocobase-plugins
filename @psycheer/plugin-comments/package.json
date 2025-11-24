@@ -20,6 +20,7 @@
   "peerDependencies": {
     "@nocobase/client": "1.x",
     "@nocobase/server": "1.x",
-    "@nocobase/test": "1.x"
+    "@nocobase/test": "1.x",
+    "@nocobase/plugin-field-markdown-vditor": "1.x"
   }
 }

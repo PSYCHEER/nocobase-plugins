@@ -91,12 +91,33 @@ export const CommentsBlock: React.FC<CommentsBlockProps> = ({ targetCollection, 
   // Initialize Vditor for new comment editor (if available)
   useEffect(() => {
     let mounted = true;
+    const cdnBase = (window as any).__nocobase_public_path__ || '/';
+    const vditorBase = `${cdnBase}static/plugins/@nocobase/plugin-field-markdown-vditor/dist/client/vditor/dist`;
+    function loadScript(src: string): Promise<void> {
+      return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) return resolve();
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+        document.body.appendChild(script);
+      });
+    }
+    function loadStyle(href: string): void {
+      if (document.querySelector(`link[href="${href}"]`)) return;
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      document.head.appendChild(link);
+    }
     const init = async () => {
       if (!newEditorRef.current) return;
       try {
-        const mod = await import('vditor');
-        await import('vditor/dist/index.css');
-        const Vditor = (mod && (mod as any).default) || (mod as any).Vditor || mod;
+        loadStyle(`${vditorBase}/index.css`);
+        await loadScript(`${vditorBase}/index.min.js`);
+        const Vditor = (window as any).Vditor;
+        if (!Vditor) throw new Error('Vditor not found on window');
         if (!mounted) return;
         try {
           newVditorRef.current = new Vditor(newEditorRef.current, {
